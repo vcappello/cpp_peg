@@ -8,6 +8,7 @@
 namespace peg
 {
 
+    /// @brief Save and restore stream status
     class stream_tran
     {
     public:
@@ -24,6 +25,26 @@ namespace peg
         }
     };
 
+    class rule_inserter_base
+    {
+    public:
+        virtual void insert(const std::string& in_string) = 0;
+    };
+
+    template<class ContainerT>
+    class rulse_inserter : public rule_inserter_base
+    {
+    public:
+        ContainerT m_container;
+
+        void insert(const std::string& in_string)
+        {
+            std::back_insert_iterator<ContainerT> ins(m_container);
+            ins = in_string;
+        }
+    };
+
+    /// @brief Basic abstract class for PEG rules
     class rule
     {
     public:
@@ -31,9 +52,10 @@ namespace peg
         using char_t = stream_t::char_type;
         using rule_ptr_t = rule *;
 
-        virtual std::tuple<bool, std::string> parse(stream_t &is) = 0;
+        virtual std::tuple<bool, std::string> parse(stream_t &in_istream, rule_inserter_base* in_inserter) = 0;
     };
 
+    /// @brief Match source stream VS the defined text
     class literal : public rule
     {
     public:
@@ -43,7 +65,7 @@ namespace peg
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
             char_t buffer[m_text.length() + 1];
 
@@ -63,6 +85,8 @@ namespace peg
         }
     };
 
+    /// @brief Match if the first character of the source stream is in the
+    /// defined char range
     class range : public rule
     {
     public:
@@ -74,7 +98,7 @@ namespace peg
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
             char_t c;
 
@@ -94,23 +118,49 @@ namespace peg
         }
     };
 
+    /// @brief Match any character in the source stream
+    class any_char : public rule
+    {
+    public:
+    
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
+        {
+            char_t c;
+
+            stream_tran tran(is);
+            is.get(c);
+
+            if (is.good())
+            {
+                return std::make_tuple(true, std::string(1, c));
+            }
+
+            tran.rollback(is);
+            return std::make_tuple(false, "");
+        }    
+    };
+
+    any_char any;
+
     class neg : public rule
     {
     public:
-        rule_ptr_t m_child;
+        rule_ptr_t m_child_not;
+        rule_ptr_t m_child_eq;
 
-        neg(rule_ptr_t in_child) : m_child(in_child)
+        neg(rule_ptr_t in_child_not, rule_ptr_t in_child_eq) : m_child_not(in_child_not),
+                                                               m_child_eq(in_child_eq)
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
             stream_tran tran(is);
-            auto [res, text] = m_child->parse(is);
+            auto [res, text] = m_child_not->parse(is, in_inserter);
 
-            if (!res)
+            if (!res && is.good())
             {
-                return std::make_tuple(true, text);
+                return m_child_eq->parse(is, in_inserter);
             }
 
             tran.rollback(is);
@@ -127,13 +177,13 @@ namespace peg
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
             stream_tran tran(is);
 
             for (auto child : m_children)
             {
-                auto [res, text] = child->parse(is);
+                auto [res, text] = child->parse(is, in_inserter);
                 if (res)
                 {
                     return std::make_tuple(true, text);
@@ -154,14 +204,14 @@ namespace peg
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
             stream_tran tran(is);
             std::stringstream text_ret;
 
             for (auto child : m_children)
             {
-                auto [res, text] = child->parse(is);
+                auto [res, text] = child->parse(is, in_inserter);
                 if (!res)
                 {
                     tran.rollback(is);
@@ -190,7 +240,7 @@ namespace peg
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
             stream_tran tran(is);
             std::size_t counter = 0;
@@ -200,7 +250,7 @@ namespace peg
             {
                 stream_tran sub_tran(is);
 
-                auto [res, text] = m_child->parse(is);
+                auto [res, text] = m_child->parse(is, in_inserter);
                 if (!res)
                 {
                     sub_tran.rollback(is);
@@ -250,14 +300,16 @@ namespace peg
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is) override
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base* in_inserter) override
         {
-            auto [res, text] = m_child->parse(is);
+            auto [res, text] = m_child->parse(is, in_inserter);
 
-            if (!res)
+            if (res)
             {
                 if (m_func)
                     m_func(text);
+
+                in_inserter->insert(text);
 
                 return std::make_tuple(true, text);
             }
@@ -265,4 +317,5 @@ namespace peg
             return std::make_tuple(false, "");
         }
     };
+
 }
