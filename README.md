@@ -26,4 +26,4 @@ TODO
 
 | class         | description                                           |
 |---------------|-------------------------------------------------------|
-| peg::capture  |                                                       |
+| peg::capture  | Capture child rule                                    |
