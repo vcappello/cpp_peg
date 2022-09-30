@@ -372,6 +372,7 @@ namespace peg
         }
     };
 
+    /// @brief Reference to an existing rule
     class ref : public rule
     {
     public:
@@ -391,6 +392,14 @@ namespace peg
             return std::make_unique<ref>(in_child);
         }
     };
+
+    std::vector<std::string> match(rule* in_rule, std::istream& is)
+    {
+        peg::rulse_inserter<std::vector<std::string>> rule_ins;
+        auto [res, match_text] = in_rule->parse(is, &rule_ins);
+
+        return rule_ins.m_container;
+    }
 
     namespace literals
     {

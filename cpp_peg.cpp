@@ -4,6 +4,25 @@
 
 using namespace peg::literals;
 
+void test_basic()
+{
+    // Rule
+    auto number = peg::capture::make(peg::repeat::make("09"_R, 1, peg::repeat::n), "number");
+    // Text to parse
+    std::stringstream ss("12345678");
+    // Match
+    auto res = peg::match(number.get(), ss);
+    // Print result
+    if (res.empty())
+    {
+        std::cout << "Not a number" << std::endl;
+    }
+    else
+    {
+        std::cout << "The number is " << res[0] << std::endl;
+    }
+}
+
 void test_math_expr()
 {
     auto opt_whitespace = peg::repeat::make(" "_L, 0, peg::repeat::n);
@@ -40,15 +59,19 @@ void test_math_expr()
          peg::ref::make(csv_line_rep.get())});
 
     std::stringstream ss("  12,  \"34\",  56  ");
-    peg::rulse_inserter<std::vector<std::string>> rule_ins;
-    auto [res, match_text] = csv_line->parse(ss, &rule_ins);
 
-    std::cout << "Match return: " << res << std::endl;
-    std::copy(rule_ins.m_container.begin(), rule_ins.m_container.end(), std::ostream_iterator<std::string>(std::cout, " - "));
+    auto res = peg::match(csv_line.get(), ss);
+
+    for (auto r : res)
+    {
+        std::cout << r << std::endl;
+    }
 }
 
 int main()
 {
+    test_basic();
+
     test_math_expr();
 
     return 0;
