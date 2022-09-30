@@ -2,45 +2,44 @@
 #include <iterator>
 #include "peg.h"
 
+using namespace peg::literals;
+
 void test_math_expr()
 {
-    auto opt_whitespace = std::make_unique<peg::repeat>(
-        std::make_unique<peg::literal>(" "), 0, peg::repeat::n);
+    auto opt_whitespace = peg::repeat::make(" "_L, 0, peg::repeat::n);
 
-    auto number = std::make_unique<peg::capture>(
-        std::make_unique<peg::repeat>(
-            std::make_unique<peg::range>('0', '9'), 1, peg::repeat::n),
-        "number");
+    auto number = peg::capture::make(peg::repeat::make("09"_R, 1, peg::repeat::n), "number");
 
-    auto string_qualif = std::make_unique<peg::literal>("\"");
+    auto string_qualif = "\""_L;
 
-    auto text = std::make_unique<peg::capture>(
-        std::make_unique<peg::sequence>(
-            peg::lst<peg::rule::rule_ptr_t>({std::make_unique<peg::ref>(string_qualif.get()),
-                                             std::make_unique<peg::repeat>(std::make_unique<peg::neg>(
-                                                                               std::make_unique<peg::ref>(string_qualif.get()),
-                                                                               std::make_unique<peg::ref>(peg::any.get())),
-                                                                           0, peg::repeat::n),
-                                             std::make_unique<peg::ref>(string_qualif.get())})),
+    auto text = peg::capture::make(
+        peg::sequence::make(
+            {peg::ref::make(string_qualif.get()),
+             peg::repeat::make(peg::neg::make(
+                                   peg::ref::make(string_qualif.get()),
+                                   peg::ref::make(peg::any.get())),
+                               0, peg::repeat::n),
+             peg::ref::make(string_qualif.get())}),
         "text");
 
-    auto csv_field = std::make_unique<peg::choice>(
-        peg::lst<peg::rule::rule_ptr_t>({std::make_unique<peg::ref>(number.get()),
-                                         std::make_unique<peg::ref>(text.get())}));
+    auto csv_field = peg::choice::make(
+        {peg::ref::make(number.get()),
+         peg::ref::make(text.get())});
 
-    auto csv_line_rep = std::make_unique<peg::repeat>(
-        std::make_unique<peg::sequence>(peg::lst<peg::rule::rule_ptr_t>({std::make_unique<peg::ref>(opt_whitespace.get()),
-                                                                         std::make_unique<peg::literal>(","),
-                                                                         std::make_unique<peg::ref>(opt_whitespace.get()),
-                                                                         std::make_unique<peg::ref>(csv_field.get())})),
+    auto csv_line_rep = peg::repeat::make(
+        peg::sequence::make(
+            {peg::ref::make(opt_whitespace.get()),
+             ","_L,
+             peg::ref::make(opt_whitespace.get()),
+             peg::ref::make(csv_field.get())}),
         0, peg::repeat::n);
 
-    auto csv_line = std::make_unique<peg::sequence>(
-        peg::lst<peg::rule::rule_ptr_t>({std::make_unique<peg::ref>(opt_whitespace.get()),
-                                         std::make_unique<peg::ref>(csv_field.get()),
-                                         std::make_unique<peg::ref>(csv_line_rep.get())}));
+    auto csv_line = peg::sequence::make(
+        {peg::ref::make(opt_whitespace.get()),
+         peg::ref::make(csv_field.get()),
+         peg::ref::make(csv_line_rep.get())});
 
-    std::stringstream ss("12,\"34\",56");
+    std::stringstream ss("  12,  \"34\",  56  ");
     peg::rulse_inserter<std::vector<std::string>> rule_ins;
     auto [res, match_text] = csv_line->parse(ss, &rule_ins);
 

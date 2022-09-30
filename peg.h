@@ -11,6 +11,18 @@
 
 namespace peg
 {
+    template <class T>
+    struct movable_il
+    {
+        mutable T t;
+
+        operator T() const && { return std::move(t); }
+
+        movable_il(T &&in) : t(std::move(in)) {}
+
+        template <typename U>
+        movable_il(U &&in) : t(std::forward<U>(in)) {}
+    };    
 
     /// @brief Save and restore stream status
     class stream_tran
@@ -170,6 +182,11 @@ namespace peg
             tran.rollback(is);
             return std::make_tuple(false, "");
         }
+
+        static std::unique_ptr<neg> make(rule_ptr_t &&in_child_not, rule_ptr_t &&in_child_eq)
+        {
+            return std::make_unique<neg>(std::move(in_child_not), std::move(in_child_eq));
+        }
     };
 
     /// @brief Match if any of given rules match
@@ -178,7 +195,7 @@ namespace peg
     public:
         std::vector<rule_ptr_t> m_children;
 
-        choice(std::vector<rule_ptr_t>&& in_children) : m_children(std::move(in_children))
+        choice(std::vector<rule_ptr_t> &&in_children) : m_children(std::move(in_children))
         {
         }
 
@@ -198,6 +215,13 @@ namespace peg
             tran.rollback(is);
             return std::make_tuple(false, "");
         }
+
+        static std::unique_ptr<choice> make(std::initializer_list<movable_il<rule::rule_ptr_t>> &&in_children)
+        {
+            std::vector<rule::rule_ptr_t> rule_list(std::make_move_iterator(in_children.begin()), std::make_move_iterator(in_children.end()));
+
+            return std::make_unique<choice>(std::move(rule_list));
+        }
     };
 
     /// @brief Match if all given rules match in the given order
@@ -206,7 +230,7 @@ namespace peg
     public:
         std::vector<rule_ptr_t> m_children;
 
-        sequence(std::vector<rule_ptr_t>&& in_children) : m_children(std::move(in_children))
+        sequence(std::vector<rule_ptr_t> &&in_children) : m_children(std::move(in_children))
         {
         }
 
@@ -228,6 +252,13 @@ namespace peg
             }
 
             return std::make_tuple(true, text_ret.str());
+        }
+
+        static std::unique_ptr<sequence> make(std::initializer_list<movable_il<rule::rule_ptr_t>> &&in_children)
+        {
+            std::vector<rule::rule_ptr_t> rule_list(std::make_move_iterator(in_children.begin()), std::make_move_iterator(in_children.end()));
+
+            return std::make_unique<sequence>(std::move(rule_list));
         }
     };
 
@@ -285,6 +316,11 @@ namespace peg
             tran.rollback(is);
             return std::make_tuple(false, "");
         }
+
+        static std::unique_ptr<repeat> make(rule_ptr_t &&in_child, std::size_t in_min, std::size_t in_max)
+        {
+            return std::make_unique<peg::repeat>(std::move(in_child), in_min, in_max);
+        }
     };
 
     /// @brief Capture child rule
@@ -324,6 +360,16 @@ namespace peg
 
             return std::make_tuple(false, "");
         }
+
+        static std::unique_ptr<capture> make(rule_ptr_t &&in_child, const std::string &in_id)
+        {
+            return std::make_unique<peg::capture>(std::move(in_child), in_id);
+        }
+
+        static std::unique_ptr<capture> make(rule_ptr_t &&in_child, const std::string &in_id, func_t in_func)
+        {
+            return std::make_unique<peg::capture>(std::move(in_child), in_id, in_func);
+        }
     };
 
     class ref : public rule
@@ -339,27 +385,27 @@ namespace peg
         {
             return m_child->parse(is, in_inserter);
         }
+
+        static std::unique_ptr<ref> make(rule *in_child)
+        {
+            return std::make_unique<ref>(in_child);
+        }
     };
 
-    template <class T>
-    struct movable_il
+    namespace literals
     {
-        mutable T t;
+        std::unique_ptr<peg::literal> operator""_L(const char *in_text, size_t in_size)
+        {
+            return std::make_unique<peg::literal>(in_text);
+        }
 
-        operator T() const && { return std::move(t); }
-
-        movable_il(T &&in) : t(std::move(in)) {}
-
-        template <typename U>
-        movable_il(U &&in) : t(std::forward<U>(in)) {}
-    };
-
-    template <class T, class A = std::allocator<T>>
-    std::vector<T, A> lst(std::initializer_list<movable_il<T>> il)
-    {
-        std::vector<T, A> r(std::make_move_iterator(il.begin()), std::make_move_iterator(il.end()));
-        return r;
+        std::unique_ptr<peg::range> operator""_R(const char *in_text, size_t in_size)
+        {
+            // TODO: check in-Text length
+            return std::make_unique<peg::range>(in_text[0], in_text[1]);
+        }
     }
+
 }
 
 #endif
