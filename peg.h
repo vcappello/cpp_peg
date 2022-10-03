@@ -378,19 +378,35 @@ namespace peg
     public:
         rule *m_child;
 
+        ref() : m_child(nullptr)
+        {            
+        }
+
         ref(rule *in_child) : m_child(in_child)
         {
         }
 
-        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base *in_inserter) override
+        ~ref() = default;
+
+        std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base *in_inserter) override        
         {
             return m_child->parse(is, in_inserter);
+        }
+
+        static std::unique_ptr<ref> make()
+        {
+            return std::make_unique<ref>();
         }
 
         static std::unique_ptr<ref> make(rule *in_child)
         {
             return std::make_unique<ref>(in_child);
         }
+
+        static std::unique_ptr<ref> forward_ref(rule *in_child)
+        {
+            return std::make_unique<ref>(in_child);
+        }        
     };
 
     std::vector<std::string> match(rule* in_rule, std::istream& is)

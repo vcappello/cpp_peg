@@ -23,7 +23,7 @@ void test_basic()
     }
 }
 
-void test_math_expr()
+void test_csv()
 {
     auto opt_whitespace = peg::repeat::make(" "_L, 0, peg::repeat::n);
 
@@ -68,9 +68,59 @@ void test_math_expr()
     }
 }
 
+void test_math_expr()
+{
+    // Expr    ← Sum
+    // Sum     ← Product (('+' / '-') Product)*
+    // Product ← Power (('*' / '/') Power)*
+    // Power   ← Value ('^' Power)?
+    // Value   ← [0-9]+ / '(' Expr ')'
+
+    auto expr_ref = peg::ref::make();
+
+    auto value = peg::choice::make({peg::repeat::make(peg::capture::make("09"_R, "number"), 1, peg::repeat::n),
+                                    peg::sequence::make({peg::capture::make("("_L, "open_par"),
+                                                         peg::ref::forward_ref(expr_ref.get()),
+                                                         peg::capture::make(")"_L, "close_par")})});
+
+    auto power_ref = peg::ref::make();
+    auto power = peg::sequence::make({peg::ref::make(value.get()),
+                                      peg::repeat::make(peg::sequence::make({peg::capture::make("^"_L, "pow"),
+                                                                             peg::ref::forward_ref(power_ref.get())}),
+                                                        0, 1)});
+    power_ref->m_child = power.get();
+
+    auto product = peg::sequence::make({peg::ref::make(power.get()),
+                                        peg::repeat::make(peg::sequence::make({peg::choice::make({peg::capture::make("*"_L, "mul"), 
+                                                                                                  peg::capture::make("/"_L, "div")}),
+                                                                         peg::ref::make(power.get())}),
+                                                    0, peg::repeat::n)});
+
+    auto sum = peg::sequence::make({peg::ref::make(product.get()),
+                                    peg::repeat::make(peg::sequence::make({peg::choice::make({peg::capture::make("+"_L, "add"), 
+                                                                                              peg::capture::make("-"_L, "sub")}),
+                                                                     peg::ref::make(product.get())}),
+                                                0, peg::repeat::n)});
+
+    auto expr = peg::ref::make(sum.get());
+
+    expr_ref->m_child = expr.get();
+
+    std::stringstream ss("(1+2)*3");
+
+    auto res = peg::match(expr.get(), ss);
+
+    for (auto r : res)
+    {
+        std::cout << r << std::endl;
+    }    
+}
+
 int main()
 {
-    test_basic();
+    //test_basic();
+
+    //test_csv();
 
     test_math_expr();
 
