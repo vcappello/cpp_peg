@@ -80,7 +80,9 @@ namespace peg
         literal(const std::string &in_text) : m_text(in_text)
         {
         }
-
+        
+        ~literal() = default;
+        
         std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base *in_inserter) override
         {
             char_t buffer[m_text.length() + 1];
