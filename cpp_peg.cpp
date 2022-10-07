@@ -70,57 +70,75 @@ void test_csv()
 
 void test_math_expr()
 {
-    // Expr    ← Sum
-    // Sum     ← Product (('+' / '-') Product)*
-    // Product ← Power (('*' / '/') Power)*
-    // Power   ← Value ('^' Power)?
-    // Value   ← [0-9]+ / '(' Expr ')'
+    // number     = [09]+
+    // factor     = number | "(" expression ")"
+    // component  = factor (("*" | "/") factor)*
+    // expression = component (("+" | "-") component)*
 
-    auto expr_ref = peg::ref::make();
+    auto number = peg::capture::make(peg::repeat::make("09"_R, 1, peg::repeat::n), "NUMBER");
+    auto open_par = peg::capture::make("("_L, "OPEN_PAR");
+    auto close_par = peg::capture::make(")"_L, "CLOSE_PAR");
+    auto plus = peg::capture::make("+"_L, "PLUS");
+    auto minus = peg::capture::make("-"_L, "MINUS");
+    auto multiply = peg::capture::make("*"_L, "MULTIPLY");
+    auto divide = peg::capture::make("/"_L, "DIVIDE");
 
-    auto value = peg::choice::make({peg::repeat::make(peg::capture::make("09"_R, "number"), 1, peg::repeat::n),
-                                    peg::sequence::make({peg::capture::make("("_L, "open_par"),
-                                                         peg::ref::forward_ref(expr_ref.get()),
-                                                         peg::capture::make(")"_L, "close_par")})});
+    auto expression_ref = peg::ref::make();
 
-    auto power_ref = peg::ref::make();
-    auto power = peg::sequence::make({peg::ref::make(value.get()),
-                                      peg::repeat::make(peg::sequence::make({peg::capture::make("^"_L, "pow"),
-                                                                             peg::ref::forward_ref(power_ref.get())}),
-                                                        0, 1)});
-    power_ref->m_child = power.get();
+    auto factor = peg::choice::make({peg::ref::make(number.get()),
+                                     peg::sequence::make({peg::ref::make(open_par.get()),
+                                                          peg::ref::forward_ref(expression_ref.get()),
+                                                          peg::ref::make(close_par.get())})});
 
-    auto product = peg::sequence::make({peg::ref::make(power.get()),
-                                        peg::repeat::make(peg::sequence::make({peg::choice::make({peg::capture::make("*"_L, "mul"), 
-                                                                                                  peg::capture::make("/"_L, "div")}),
-                                                                         peg::ref::make(power.get())}),
-                                                    0, peg::repeat::n)});
+    auto component = peg::sequence::make({peg::ref::make(factor.get()),
+                                          peg::repeat::make(
+                                              peg::sequence::make(
+                                                  {peg::choice::make(
+                                                       {peg::ref::make(multiply.get()),
+                                                        peg::ref::make(divide.get())}),
+                                                   peg::ref::make(factor.get())}),
+                                              0, peg::repeat::n)});
 
-    auto sum = peg::sequence::make({peg::ref::make(product.get()),
-                                    peg::repeat::make(peg::sequence::make({peg::choice::make({peg::capture::make("+"_L, "add"), 
-                                                                                              peg::capture::make("-"_L, "sub")}),
-                                                                     peg::ref::make(product.get())}),
-                                                0, peg::repeat::n)});
+    auto expression = peg::sequence::make({peg::ref::make(component.get()),
+                                          peg::repeat::make(
+                                              peg::sequence::make(
+                                                  {peg::choice::make(
+                                                       {peg::ref::make(plus.get()),
+                                                        peg::ref::make(minus.get())}),
+                                                   peg::ref::make(component.get())}),
+                                              0, peg::repeat::n)});
 
-    auto expr = peg::ref::make(sum.get());
+    expression_ref->m_child = expression.get();
 
-    expr_ref->m_child = expr.get();
+    std::stringstream ss("1*(2+3)");
+    // expression
+    //   component
+    //     factor
+    //       number
+    //   plus
+    //   component
+    //     factor
+    //       expression
+    //         component
+    //           factor
+    //             number
+    //           multiply
+    //           factor
+    //             number
 
-    std::stringstream ss("(1+2)*3");
-
-    auto res = peg::match(expr.get(), ss);
+    auto res = peg::match(expression.get(), ss);
 
     for (auto r : res)
     {
         std::cout << r << std::endl;
-    }    
+    }
 }
 
 int main()
 {
-    //test_basic();
+    // test_basic();
 
-    //test_csv();
+    // test_csv();
 
     test_math_expr();
 
