@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <vector>
+#include <stack>
 #include <string>
 #include <sstream>
 #include <limits>
@@ -41,23 +42,21 @@ namespace peg
         }
     };
 
+    class token
+    {
+    public:
+        std::string m_id;
+        std::string m_text;
+    };
+
+    class rule;
+
     class rule_inserter_base
     {
     public:
-        virtual void insert(const std::string &in_string) = 0;
-    };
-
-    template <class ContainerT>
-    class rulse_inserter : public rule_inserter_base
-    {
-    public:
-        ContainerT m_container;
-
-        void insert(const std::string &in_string)
-        {
-            std::back_insert_iterator<ContainerT> ins(m_container);
-            ins = in_string;
-        }
+        virtual void insert(rule* in_rule, const std::string &in_string) = 0;
+        virtual void push() = 0;
+        virtual void pop() = 0;
     };
 
     /// @brief Basic abstract class for PEG rules
@@ -174,7 +173,10 @@ namespace peg
         std::tuple<bool, std::string> parse(stream_t &is, rule_inserter_base *in_inserter) override
         {
             stream_tran tran(is);
+            
+            in_inserter->push();
             auto [res, text] = m_child_not->parse(is, in_inserter);
+            in_inserter->pop();
 
             if (!res && is.good())
             {
@@ -355,7 +357,7 @@ namespace peg
                 if (m_func)
                     m_func(text);
 
-                in_inserter->insert(text);
+                in_inserter->insert(this, text);
 
                 return std::make_tuple(true, text);
             }
@@ -409,6 +411,34 @@ namespace peg
         {
             return std::make_unique<ref>(in_child);
         }        
+    };
+
+    template <class ContainerT>
+    class rulse_inserter : public rule_inserter_base
+    {
+    public:
+        ContainerT m_container;
+        std::stack<ContainerT::size_t> m_pos;
+
+        void insert(rule* in_rule, const std::string &in_string) override
+        {
+            std::back_insert_iterator<ContainerT> ins(m_container);
+            ins = in_string;
+        }
+
+        void push() override
+        {
+            m_pos.push(m_container.size());
+        }
+
+        void pop() override
+        {
+            int lpos = m_pos.top();
+            m_pos.pop();
+
+            while (m_container.size() > lpos)
+                m_container.pop_back();
+        }
     };
 
     std::vector<std::string> match(rule* in_rule, std::istream& is)
