@@ -418,7 +418,7 @@ namespace peg
     {
     public:
         ContainerT m_container;
-        std::stack<ContainerT::size_t> m_pos;
+        std::stack<typename ContainerT::size_type> m_pos;
 
         void insert(rule* in_rule, const std::string &in_string) override
         {
